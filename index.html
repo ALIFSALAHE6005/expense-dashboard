@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="th" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Real-Time Dashboard: จดจำรายจ่าย (Unified 3-Metric Chart)</title>
+  
+  <meta name="description" content="Dashboard สรุปข้อมูลรายรับ รายจ่าย และยอดคงเหลือ ในกราฟแท่งเดียวแบบเรียลไทม์ เลือกได้ 1วัน 1สัปดาห์ 1เดือน 1ปี">
+  
+  <!-- PWA & Mobile App Settings -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#0F172A">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="จดจำรายจ่าย">
+  <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/2953/2953361.png">
+  
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  
+  <!-- Stylesheet -->
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+  <div class="app-container">
+    
+    <!-- Navbar -->
+    <header class="navbar">
+      <div class="brand">
+        <div class="brand-icon">📊</div>
+        <div>
+          <h1 class="brand-title">Real-time Dashboard: จดจำรายจ่าย</h1>
+          <p class="brand-subtitle">ดึงและสรุปข้อมูลจาก Google Sheets แบบเรียลไทม์</p>
+        </div>
+      </div>
+
+      <div class="nav-actions">
+        <!-- Live Auto-Refresh Toggle -->
+        <label style="display: flex; align-items: center; gap: 8px; font-size: 0.85rem; color: var(--text-secondary); cursor: pointer;">
+          <input type="checkbox" id="autoRefreshToggle" checked style="accent-color: var(--income-color); width: 16px; height: 16px;">
+          <span>Auto-Refresh (เรียลไทม์ 5s)</span>
+        </label>
+
+        <!-- Status Indicator -->
+        <div class="status-badge" id="statusBadge">
+          <span class="status-dot connected" id="statusDot"></span>
+          <span id="statusText">กำลังโหลด...</span>
+        </div>
+
+        <button class="btn btn-secondary" id="refreshBtn" title="รีเฟรชข้อมูลตอนนี้">
+          🔄 ดึงข้อมูลสด
+        </button>
+
+        <button class="btn btn-secondary" id="openSettingsBtn" title="ตั้งค่าแหล่งข้อมูล Sheet">
+          ⚙️ แหล่งข้อมูล Sheet
+        </button>
+
+        <button class="btn btn-icon" id="themeToggleBtn" title="สลับธีม">
+          🌙
+        </button>
+      </div>
+    </header>
+
+    <!-- Summary Stats Grid -->
+    <section class="stats-grid">
+      <!-- Income -->
+      <div class="stat-card income">
+        <div class="stat-header">
+          <span class="stat-label">รายรับรวม</span>
+          <div class="stat-icon">📈</div>
+        </div>
+        <div class="stat-value" id="totalIncomeVal">฿0</div>
+        <div class="stat-sub">รายรับทั้งหมดจาก Google Sheet</div>
+      </div>
+
+      <!-- Expense -->
+      <div class="stat-card expense">
+        <div class="stat-header">
+          <span class="stat-label">รายจ่ายรวม</span>
+          <div class="stat-icon">📉</div>
+        </div>
+        <div class="stat-value" id="totalExpenseVal">฿0</div>
+        <div class="stat-sub">รายจ่ายทั้งหมดจาก Google Sheet</div>
+      </div>
+
+      <!-- Net Balance -->
+      <div class="stat-card balance">
+        <div class="stat-header">
+          <span class="stat-label">ยอดเงินคงเหลือสุทธิ</span>
+          <div class="stat-icon">💵</div>
+        </div>
+        <div class="stat-value" id="netBalanceVal">฿0</div>
+        <div class="stat-sub">รายรับหักลบด้วยรายจ่าย</div>
+      </div>
+
+      <!-- Savings Rate -->
+      <div class="stat-card savings">
+        <div class="stat-header">
+          <span class="stat-label">อัตราการออม</span>
+          <div class="stat-icon">🎯</div>
+        </div>
+        <div class="stat-value" id="savingsRateVal">0%</div>
+        <div class="stat-sub">สัดส่วนเงินคงเหลือสะสม</div>
+      </div>
+    </section>
+
+    <!-- Main Chart Section: Unified 3-Metric Bar Chart -->
+    <section class="dashboard-grid">
+      <!-- Main Bar Chart Card -->
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">📊 สรุป 1.รายรับ 2.รายจ่าย 3.ยอดคงเหลือ</h2>
+          
+          <!-- Timeframe Selector Buttons (1วัน / 1สัปดาห์ / 1เดือน / 1ปี) -->
+          <div class="timeframe-btn-group">
+            <button class="timeframe-btn" data-timeframe="day">1 วัน</button>
+            <button class="timeframe-btn" data-timeframe="week">1 สัปดาห์</button>
+            <button class="timeframe-btn active" data-timeframe="month">1 เดือน</button>
+            <button class="timeframe-btn" data-timeframe="year">1 ปี</button>
+          </div>
+        </div>
+
+        <div class="chart-container">
+          <canvas id="unifiedBarChartCanvas"></canvas>
+        </div>
+      </div>
+
+      <!-- Category Expense Donut Chart -->
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">🍩 สัดส่วนค่าใช้จ่ายตามหมวดหมู่</h2>
+        </div>
+        <div class="chart-container">
+          <canvas id="categoryChartCanvas"></canvas>
+        </div>
+      </div>
+    </section>
+
+    <!-- Filter & Controls Bar -->
+    <section class="filter-bar">
+      <div class="filter-group">
+        <div class="filter-btn-group">
+          <button class="filter-tab active" data-filter="all">ทั้งหมด</button>
+          <button class="filter-tab" data-filter="income">รายรับ</button>
+          <button class="filter-tab" data-filter="expense">รายจ่าย</button>
+        </div>
+
+        <select class="input-style" id="dateRangeFilter">
+          <option value="all">ทั้งหมดทุกช่วงเวลา</option>
+          <option value="month">เดือนนี้</option>
+          <option value="today">วันนี้</option>
+        </select>
+
+        <select class="input-style" id="categoryFilter">
+          <option value="all">หมวดหมู่ทั้งหมด</option>
+          <option value="อาหาร">อาหาร</option>
+          <option value="การเดินทาง">การเดินทาง</option>
+          <option value="ที่พัก/บิล">ที่พัก/บิล</option>
+          <option value="ช้อปปิ้ง">ช้อปปิ้ง</option>
+          <option value="ความบันเทิง">ความบันเทิง</option>
+          <option value="เงินเดือน">เงินเดือน</option>
+          <option value="งานนอก/ฟรีแลนซ์">งานนอก/ฟรีแลนซ์</option>
+        </select>
+      </div>
+
+      <div class="filter-group">
+        <input type="text" class="input-style" id="searchInput" placeholder="🔍 ค้นหาหมายเหตุ/หมวดหมู่..." style="width: 220px;">
+        <button class="btn btn-secondary" id="exportCsvBtn" title="ส่งออกเป็น CSV">
+          📥 Export CSV
+        </button>
+      </div>
+    </section>
+
+    <!-- Real-time Transactions Table Section -->
+    <section class="card">
+      <div class="card-header">
+        <h2 class="card-title">📜 ประวัติรายการรายรับ-รายจ่าย (Real-Time จาก Google Sheet)</h2>
+      </div>
+
+      <div class="table-responsive">
+        <table class="transaction-table">
+          <thead>
+            <tr>
+              <th>วันที่</th>
+              <th>หมวดหมู่</th>
+              <th>หมายเหตุ / รายละเอียด</th>
+              <th>ช่องทางชำระ</th>
+              <th>จำนวนเงิน</th>
+            </tr>
+          </thead>
+          <tbody id="transactionTbody">
+            <!-- Dynamic real-time items -->
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+  </div>
+
+  <!-- Modal: Settings Google Sheet Connection -->
+  <div class="modal-overlay" id="settingsModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 class="modal-title">⚙️ ตั้งค่าแหล่งข้อมูล Google Sheet</h3>
+        <button class="close-btn">&times;</button>
+      </div>
+
+      <form id="settingsForm">
+        <div class="form-group">
+          <label class="form-label">Google Sheet ID หรือ Web App URL</label>
+          <input type="text" id="sheetSourceInput" class="input-style" style="width: 100%; font-size: 0.88rem;" value="1rFnB1qoZKJETCuHqy0KgF-9XqPx8GHd3bsmz_m5uVns">
+          <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 6px;">
+            ใส่ <b>Sheet ID</b> หรือ URL ของ <b>Google Apps Script Web App</b>
+          </p>
+        </div>
+
+        <div style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 20px;">
+          <button type="button" class="btn btn-secondary close-modal-btn">ยกเลิก</button>
+          <button type="submit" class="btn btn-primary">บันทึก & ดึงข้อมูลสด</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Toast Container -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <!-- Application Scripts -->
+  <script src="js/storage.js"></script>
+  <script src="js/sheets-api.js"></script>
+  <script src="js/charts.js"></script>
+  <script src="js/app.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js').catch(err => console.log('SW registration failed:', err));
+      });
+    }
+  </script>
+</body>
+</html>
